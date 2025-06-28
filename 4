@@ -1,0 +1,47 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import geopandas as gpd
+from shapely.geometry import Point
+
+df = pd.read_csv('US_Accidents_Mar23.csv', parse_dates=['Start_Time'])
+df = df.sample(100000, random_state=42).dropna(subset=[
+    'Weather_Condition', 'Sunrise_Sunset', 'Start_Lat', 'Start_Lng'
+])
+
+df['Hour'] = df['Start_Time'].dt.hour
+df['DayOfWeek'] = df['Start_Time'].dt.day_name()
+df['IsNight'] = df['Sunrise_Sunset'].apply(lambda x: 1 if x=='Night' else 0)
+df['Weather'] = df['Weather_Condition'].str.split().str[0]
+
+plt.figure(figsize=(12,5))
+sns.countplot(x='Hour', data=df, palette='viridis')
+plt.title('Accidents by Hour of Day')
+plt.xticks(range(0,24))
+plt.show()
+
+plt.figure(figsize=(10,4))
+topw = df['Weather'].value_counts().nlargest(5).index
+sns.countplot(y='Weather', data=df[df['Weather'].isin(topw)], order=topw)
+plt.title('Top 5 Weather Conditions')
+plt.show()
+
+sns.barplot(x='IsNight', y='Temperature(F)', data=df)
+plt.title('Average Temperature during Night vs Day Accidents')
+plt.xticks([0,1], ['Day','Night'])
+plt.show()
+
+gdf = gpd.GeoDataFrame(df, 
+    geometry=gpd.points_from_xy(df.Start_Lng, df.Start_Lat),
+    crs="EPSG:4326").to_crs(epsg=3857)
+
+fig, ax = plt.subplots(1, 1, figsize=(10,10))
+gdf.plot(alpha=0.1, markersize=1, ax=ax)
+gdf.plot(ax=ax, markersize=0.5, c='red', alpha=0.05)
+ax.set_title('Accident Locations')
+
+xmin, ymin, xmax, ymax = gdf.total_bounds
+hb = ax.hexbin(gdf.geometry.x, gdf.geometry.y, gridsize=100, cmap='inferno', mincnt=1)
+fig.colorbar(hb, ax=ax, label='Accident count')
+plt.show()
